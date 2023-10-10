@@ -7,7 +7,9 @@
         printf("The sum is %d",sum);
        
     }
+/*
 ------------------------------------------
 Output:
 Enter two numbers : 4 5
 The sum is 9 
+*/

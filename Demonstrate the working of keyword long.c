@@ -11,6 +11,7 @@ int main() {
     printf("Size of long double = %zu bytes\n", sizeof(f));
     return 0;
 }
+/*
 ---------------------------------------------------------------
 Output:
 Size of int = 4 bytes 
@@ -18,3 +19,4 @@ Size of long int = 8 bytes
 Size of long long int = 8 bytes
 Size of double = 8 bytes
 Size of long double = 16 bytes
+*?

@@ -7,7 +7,7 @@
         printf("The sum is %d",sum);
        
     }
-/*
+/* 
 ------------------------------------------
 Output:
 Enter two numbers : 4 5

@@ -10,7 +10,7 @@ int main()
         scanf("%d", arr + i);
     }
     for(i = num-1; i>=0;--i)//using for loop to reverse the array
-        printf("%d ", *(arr + i));
+        printf("%d ", *(arr + i)); 
     return 0;
 }
 /* OUTPUT

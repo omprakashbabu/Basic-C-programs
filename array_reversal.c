@@ -3,7 +3,7 @@
 
 int main()
 {
-    int num, *arr, i;
+    int num, *arr, i; 
     scanf("%d", &num);
     arr = (int*) malloc(num * sizeof(int));
     for(i = 0; i < num; i++) {

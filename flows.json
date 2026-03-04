@@ -1,0 +1,386 @@
+[
+    {
+        "id": "60064538c1a8435b",
+        "type": "tab",
+        "label": "CSV Dataset Flow - Fixed",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "9696813af0b65172",
+        "type": "inject",
+        "z": "60064538c1a8435b",
+        "name": "Load CSV on Startup",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 140,
+        "y": 100,
+        "wires": [
+            [
+                "b5ebc09e3346d242"
+            ]
+        ]
+    },
+    {
+        "id": "b5ebc09e3346d242",
+        "type": "file in",
+        "z": "60064538c1a8435b",
+        "name": "Read CSV File",
+        "filename": "/data/risma_dataset.csv",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 350,
+        "y": 100,
+        "wires": [
+            [
+                "87b52d2a0a850aee"
+            ]
+        ]
+    },
+    {
+        "id": "87b52d2a0a850aee",
+        "type": "function",
+        "z": "60064538c1a8435b",
+        "name": "Parse CSV Manually",
+        "func": "// Get the raw CSV text\nconst csvText = msg.payload;\n\n// Split into lines\nconst lines = csvText.split('\\n').filter(line => line.trim().length > 0);\n\nif (lines.length < 2) {\n    node.error('CSV file is empty or has no data rows');\n    return null;\n}\n\n// First line is headers\nconst headers = lines[0].split(',').map(h => h.trim());\n\n// Parse all data rows\nconst csvData = [];\nlet skippedRows = 0;\n\nfor (let i = 1; i < lines.length; i++) {\n    const values = lines[i].split(',');\n    \n    if (values.length !== headers.length) {\n        // Skip malformed rows\n        skippedRows++;\n        continue;\n    }\n    \n    // Create object for this row\n    const row = {};\n    let hasValidData = false;\n    \n    for (let j = 0; j < headers.length; j++) {\n        const value = values[j].trim();\n        row[headers[j]] = value;\n        \n        // Check if this row has any non-empty data\n        if (value.length > 0 && value !== '0' && !isNaN(parseFloat(value))) {\n            hasValidData = true;\n        }\n    }\n    \n    // Only add rows that have valid data\n    // Skip rows where moisture, temperature, and humidity are all empty or zero\n    const moisture = parseFloat(row.moisture || 0);\n    const temperature = parseFloat(row.temperature || 0);\n    const humidity = parseFloat(row.humidity || 0);\n    \n    if (moisture !== 0 || temperature !== 0 || humidity !== 0) {\n        csvData.push(row);\n    } else {\n        skippedRows++;\n    }\n}\n\n// Store in flow context\nflow.set('csvData', csvData);\nflow.set('tomatoIndex', 0);\nflow.set('wheatIndex', 0);\n\nnode.status({fill:\"green\", shape:\"dot\", text:`Loaded ${csvData.length} rows (skipped ${skippedRows})`});\n\n// Output summary\nmsg.payload = {\n    totalRows: csvData.length,\n    skippedRows: skippedRows,\n    columns: headers,\n    sampleRow: csvData[0]\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 570,
+        "y": 100,
+        "wires": [
+            [
+                "90f7c3d9494cdac0"
+            ]
+        ]
+    },
+    {
+        "id": "90f7c3d9494cdac0",
+        "type": "debug",
+        "z": "60064538c1a8435b",
+        "name": "CSV Loaded",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 790,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "ebf8f20d43eacc23",
+        "type": "inject",
+        "z": "60064538c1a8435b",
+        "name": "Tomato Timer (10s)",
+        "props": [],
+        "repeat": "10",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 2,
+        "topic": "",
+        "x": 140,
+        "y": 240,
+        "wires": [
+            [
+                "001faa39d0a08ed9"
+            ]
+        ]
+    },
+    {
+        "id": "001faa39d0a08ed9",
+        "type": "function",
+        "z": "60064538c1a8435b",
+        "name": "Get Next Tomato Row",
+        "func": "// Get CSV data\nconst csvData = flow.get('csvData') || [];\n\nif (csvData.length === 0) {\n    node.error('CSV data not loaded!');\n    return null;\n}\n\n// Get current index\nlet index = flow.get('tomatoIndex') || 0;\n\n// Get the row\nconst row = csvData[index];\n\n// Increment index for next time\nindex = (index + 1) % csvData.length;\nflow.set('tomatoIndex', index);\n\n// Pass the entire row\nmsg.payload = row;\nmsg.cropName = 'tomato';\n\nnode.status({fill:\"blue\", shape:\"dot\", text:`Row ${index}/${csvData.length}`});\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 240,
+        "wires": [
+            [
+                "6a908620366bf7b1"
+            ]
+        ]
+    },
+    {
+        "id": "6a908620366bf7b1",
+        "type": "function",
+        "z": "60064538c1a8435b",
+        "name": "Map to Sensor Format",
+        "func": "// Get the raw CSV row\nconst row = msg.payload;\n\n// Get threshold\nconst threshold = flow.get('threshold_tomato') || 30;\n\n// Parse values from CSV (they're strings)\nconst moisture = parseFloat(row.moisture || 0);\nconst rainfall = parseFloat(row.rainfall || 0);\nconst temperature = parseFloat(row.temperature || 0);\nconst humidity = parseFloat(row.humidity || 0);\nconst pH = parseFloat(row.pH || 0);\nconst ec = parseFloat(row.EC_dS_m || 0);\nconst nitrogen = parseFloat(row.Nitrogen_mg_kg || 0);\nconst phosphorus = parseFloat(row.Phosphorus_mg_kg || 0);\nconst potassium = parseFloat(row.Potassium_mg_kg || 0);\nconst light = parseFloat(row.Light_Intensity_lux || 0);\nconst timestamp = Date.parse(row.timestamp || 0);\n\n// Create sensor data object\nconst sensorData = {\n    moisture: moisture,\n    soilTemperature: temperature,\n    rainfall: rainfall,\n    humidity: humidity,\n    lightIntensity: light,\n    pH: pH,\n    nitrogen: nitrogen,\n    phosphorus: phosphorus,\n    potassium: potassium,\n    ec: ec,\n    //timestamp: new Date().toISOString(),\n    timestamp: timestamp,\n    threshold: threshold,\n    status: moisture < threshold ? \"ON\" : \"OFF\"\n};\n\nmsg.payload = sensorData;\nmsg.topic = \"crop/tomato/data\";\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 240,
+        "wires": [
+            [
+                "3dd608314ecc64a8",
+                "016695e60e8a099a"
+            ]
+        ]
+    },
+    {
+        "id": "3dd608314ecc64a8",
+        "type": "mqtt out",
+        "z": "60064538c1a8435b",
+        "name": "Publish Tomato",
+        "topic": "crop/tomato/data",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "647f03e906c10b5f",
+        "x": 870,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "016695e60e8a099a",
+        "type": "debug",
+        "z": "60064538c1a8435b",
+        "name": "Tomato Data",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 870,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "09b9dc19817e8c25",
+        "type": "inject",
+        "z": "60064538c1a8435b",
+        "name": "Wheat Timer (10s)",
+        "props": [],
+        "repeat": "10",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 2,
+        "topic": "",
+        "x": 140,
+        "y": 400,
+        "wires": [
+            [
+                "b38988f9cc2bbe6b"
+            ]
+        ]
+    },
+    {
+        "id": "b38988f9cc2bbe6b",
+        "type": "function",
+        "z": "60064538c1a8435b",
+        "name": "Get Next Wheat Row",
+        "func": "// Get CSV data\nconst csvData = flow.get('csvData') || [];\n\nif (csvData.length === 0) {\n    node.error('CSV data not loaded!');\n    return null;\n}\n\n// Get current index\nlet index = flow.get('wheatIndex') || 0;\n\n// Get the row\nconst row = csvData[index];\n\n// Increment index for next time\nindex = (index + 1) % csvData.length;\nflow.set('wheatIndex', index);\n\n// Pass the entire row\nmsg.payload = row;\nmsg.cropName = 'wheat';\n\nnode.status({fill:\"blue\", shape:\"dot\", text:`Row ${index}/${csvData.length}`});\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 400,
+        "wires": [
+            [
+                "06cbb92b10cd78c2"
+            ]
+        ]
+    },
+    {
+        "id": "06cbb92b10cd78c2",
+        "type": "function",
+        "z": "60064538c1a8435b",
+        "name": "Map to Sensor Format",
+        "func": "// Get the raw CSV row\nconst row = msg.payload;\n\n// Get threshold\nconst threshold = flow.get('threshold_wheat') || 25;\n\n// Parse values from CSV (they're strings)\nconst moisture = parseFloat(row.moisture || 0);\nconst temperature = parseFloat(row.temperature || 0);\nconst rainfall = parseFloat(row.rainfall || 0);\nconst humidity = parseFloat(row.humidity || 0);\nconst pH = parseFloat(row.pH || 0);\nconst ec = parseFloat(row.EC_dS_m || 0);\nconst nitrogen = parseFloat(row.Nitrogen_mg_kg || 0);\nconst phosphorus = parseFloat(row.Phosphorus_mg_kg || 0);\nconst potassium = parseFloat(row.Potassium_mg_kg || 0);\nconst light = parseFloat(row.Light_Intensity_lux || 0);\nconst timestamp = Date.parse(row.timestamp || 0);\n\n// Create sensor data object\nconst sensorData = {\n    moisture: moisture,\n    soilTemperature: temperature,\n    rainfall: rainfall,\n    humidity: humidity,\n    lightIntensity: light,\n    pH: pH,\n    nitrogen: nitrogen,\n    phosphorus: phosphorus,\n    potassium: potassium,\n    ec: ec,\n    //timestamp: new Date().toISOString(),\n    timestamp: timestamp,\n    threshold: threshold,\n    status: moisture < threshold ? \"ON\" : \"OFF\"\n};\n\nmsg.payload = sensorData;\nmsg.topic = \"crop/wheat/data\";\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 400,
+        "wires": [
+            [
+                "52832cb98eebee22",
+                "9cc559e211bc98c3"
+            ]
+        ]
+    },
+    {
+        "id": "52832cb98eebee22",
+        "type": "mqtt out",
+        "z": "60064538c1a8435b",
+        "name": "Publish Wheat",
+        "topic": "crop/wheat/data",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "647f03e906c10b5f",
+        "x": 870,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "9cc559e211bc98c3",
+        "type": "debug",
+        "z": "60064538c1a8435b",
+        "name": "Wheat Data",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 870,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "99d0b4228e20db97",
+        "type": "mqtt in",
+        "z": "60064538c1a8435b",
+        "name": "",
+        "topic": "crop/tomato/config",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "647f03e906c10b5f",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 560,
+        "wires": [
+            [
+                "65f4880b40dab18d"
+            ]
+        ]
+    },
+    {
+        "id": "725fcf9a80cef5a4",
+        "type": "mqtt in",
+        "z": "60064538c1a8435b",
+        "name": "",
+        "topic": "crop/wheat/config",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "647f03e906c10b5f",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 620,
+        "wires": [
+            [
+                "65f4880b40dab18d"
+            ]
+        ]
+    },
+    {
+        "id": "65f4880b40dab18d",
+        "type": "function",
+        "z": "60064538c1a8435b",
+        "name": "Store Threshold",
+        "func": "// Extract crop name from topic\nconst cropName = msg.topic.split('/')[1];\nconst newThreshold = msg.payload.threshold || 30;\n\n// Store with crop-specific key\nflow.set(`threshold_${cropName}`, newThreshold);\n\nmsg.payload = {\n    message: \"Threshold updated\",\n    crop: cropName,\n    newThreshold: newThreshold\n};\n\nnode.status({fill:\"green\", shape:\"dot\", text:`${cropName}: ${newThreshold}%`});\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 590,
+        "wires": [
+            [
+                "d8c68d6c67ecb382"
+            ]
+        ]
+    },
+    {
+        "id": "d8c68d6c67ecb382",
+        "type": "debug",
+        "z": "60064538c1a8435b",
+        "name": "Threshold",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 640,
+        "y": 590,
+        "wires": []
+    },
+    {
+        "id": "647f03e906c10b5f",
+        "type": "mqtt-broker",
+        "name": "EMQX-connection",
+        "broker": "ffff6f36.ala.asia-southeast1.emqxsl.com",
+        "port": "8883",
+        "tls": "",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": true,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]
